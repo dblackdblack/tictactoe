@@ -1,0 +1,20 @@
+{
+  "name": "tictactoe",
+  "version": "0.0.0",
+  "homepage": "https://github.com/dblackdblack/tictactoe",
+  "authors": [
+    "David Black <dblack@bepress.com>"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "angularjs": "~1.3.0",
+    "bootstrap": "~3.3.0"
+  }
+}
