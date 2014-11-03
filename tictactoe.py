@@ -14,10 +14,9 @@ from concurrent import futures
 
 from sqlalchemy import desc
 from sqlalchemy.orm.exc import NoResultFound
-from sqlalchemy.schema import ForeignKey
 
 from flask import (Flask, flash, redirect, url_for, render_template, request,
-                   session, abort)
+                   abort)
 from flask.ext.sqlalchemy import SQLAlchemy
 from flask.ext.login import (LoginManager, login_user, logout_user,
                              login_required, current_user)
