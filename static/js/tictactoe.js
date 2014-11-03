@@ -30,15 +30,15 @@ var ticTacToeCtrl = ticTacToeApp.controller('ticTacToeCtrl', function($scope, $q
   $scope.getLatestGame();
 
   $scope.getClassForCell = function(x, y) {
-    var emptyStyle = "fa fa-4x";
+    var emptyStyle = "fa fa-4x col-md-3";
     var cellVal = $scope.cells[x][y];
 
     if(cellVal === null) {
-      return emptyStyle;
+      return emptyStyle + " fa-square-o invisible";
     } else if(cellVal === 'x') {
-      return "fa fa-4x fa-close";
+      return emptyStyle + " fa-close red";
     } else if(cellVal === 'o') {
-      return "fa fa-4x fa-circle-o";
+      return emptyStyle + " fa-circle-o red";
     }
   };
 
@@ -49,6 +49,7 @@ var ticTacToeCtrl = ticTacToeApp.controller('ticTacToeCtrl', function($scope, $q
       return;
     }
 
+    $scope.cells[x][y] = 'x';
     $scope.showSpinner = true;
     $http.post('cell_click', angular.toJson({x: x, y: y}))
       .success(parseResponse)

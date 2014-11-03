@@ -25,37 +25,35 @@
       </div>
       <div id="navbar" class="collapse navbar-collapse">
         <ul class="nav navbar-nav">
-          <li class="active"><a href="#">Home</a></li>
-          <li><a href="#about">About</a></li>
-          <li><a href="#contact">Contact</a></li>
+          <li><a href="{{ logout_url }}">Logout</a></li>
+          <li><p class="navbar-text navbar-right">Welcome, {{ username }}</p></li>
         </ul>
       </div><!--/.nav-collapse -->
     </div>
   </nav>
 
   <div ng-controller="ticTacToeCtrl">
-    <button ng-disabled="gameStatus === 'new'" ng-click="newGame()">New game</button>
-    <div ng-show="gameStatus == 'won'" ng-cloak>Somebody won</div><br>
-    <div ng-show="gameStatus == 'tie'" ng-cloak>It's a tie!</div><br>
-    <div ng-show="showSpinner" ng-cloak>
-      <i class="fa fa-spinner fa-spin fa-4x"></i>
-    </div>
-    <div class="container" ng-hide="showSpinner">
-      <table class="table table-striped text-center">
+    <i ng-show="showSpinner" ng-cloak class="fa fa-spinner fa-spin fa-4x"></i>
+    <button ng-hide="gameStatus === 'new'" ng-click="newGame()" ng-cloak class="btn btn-info">New game</button>
+    <span ng-show="gameStatus == 'won'" ng-cloak>You lost!</span>
+    <span ng-show="gameStatus == 'tie'" ng-cloak>It's a tie!</span>
+    <br>
+    <div class="container">
+      <table class="table table-bordered text-center center-block">
         <tr>
-          <td ng-click="cellClicked(0,0)">1<i ng-class="getClassForCell(0, 0)"></i></td>
-          <td ng-click="cellClicked(1,0)">2<i ng-class="getClassForCell(1, 0)"></i></td>
-          <td ng-click="cellClicked(2,0)">3<i ng-class="getClassForCell(2, 0)"></i></td>
+          <td ng-click="cellClicked(0, 0)"><i ng-class="getClassForCell(0, 0)"></i></td>
+          <td ng-click="cellClicked(1, 0)"><i ng-class="getClassForCell(1, 0)"></i></td>
+          <td ng-click="cellClicked(2, 0)"><i ng-class="getClassForCell(2, 0)"></i></td>
         </tr>
         <tr>
-          <td ng-click="cellClicked(0,1)">4<i ng-class="getClassForCell(0, 1)"></i></td>
-          <td ng-click="cellClicked(1,1)">5<i ng-class="getClassForCell(1, 1)"></i></td>
-          <td ng-click="cellClicked(2,1)">6<i ng-class="getClassForCell(2, 1)"></i></td>
+          <td ng-click="cellClicked(0, 1)"><i ng-class="getClassForCell(0, 1)"></i></td>
+          <td ng-click="cellClicked(1, 1)"><i ng-class="getClassForCell(1, 1)"></i></td>
+          <td ng-click="cellClicked(2, 1)"><i ng-class="getClassForCell(2, 1)"></i></td>
         </tr>
         <tr>
-          <td ng-click="cellClicked(0,2)">7<i ng-class="getClassForCell(0, 2)"></i></td>
-          <td ng-click="cellClicked(1,2)">8<i ng-class="getClassForCell(1, 2)"></i></td>
-          <td ng-click="cellClicked(2,2)">9<i ng-class="getClassForCell(2, 2)"></i></td>
+          <td ng-click="cellClicked(0, 2)"><i ng-class="getClassForCell(0, 2)"></i></td>
+          <td ng-click="cellClicked(1, 2)"><i ng-class="getClassForCell(1, 2)"></i></td>
+          <td ng-click="cellClicked(2, 2)"><i ng-class="getClassForCell(2, 2)"></i></td>
         </tr>
       </table>
     </div>
