@@ -7,6 +7,7 @@ import copy
 import json
 import os.path
 import datetime
+import itertools
 
 import pytz
 from concurrent import futures
@@ -50,13 +51,12 @@ def tictactoe():
     return render_template('index.html', logout_url=url_for('logout'),
                            username=current_user.username)
 
-    # return template.render()
-
 @app.route("/logout")
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
 
 @app.route("/login", methods=("GET", "POST"))
 def login():
@@ -69,6 +69,7 @@ def login():
 
     return render_template("login.html", form=form,
                            new_user_url=url_for('new_user'))
+
 
 @app.route('/new_user', methods=('GET', 'POST'))
 def new_user():
@@ -84,6 +85,7 @@ def new_user():
     return render_template("new_user.html", form=form,
                            login_url=url_for('login'))
 
+
 @app.route('/latest_game', methods=('GET',))
 @login_required
 def latest_game():
@@ -97,6 +99,7 @@ def latest_game():
         return json.dumps({'cells': result, 'status': 'new'})
 
 
+# XXX add CSRF checking
 @app.route('/cell_click', methods=('POST',))
 @login_required
 def cell_click():
@@ -105,12 +108,12 @@ def cell_click():
     game = current_user.latest_game() or Game.new_game(user_id=current_user.id)
 
     if game.is_valid_move(x, y):
-        if game.is_in_won_state(board_state=game.get_cell_list()):
+        if _is_in_won_state(board_state=game.get_cell_list()):
             raise ValidationError('this game has already been won')
 
         game.add_move(x=x, y=y, player='x')
 
-        winner = game.is_in_won_state(board_state=game.get_cell_list())
+        winner = _is_in_won_state(board_state=game.get_cell_list())
         if winner and winner == 'tie':
             game.change_status(status='tie')
         elif winner:
@@ -121,7 +124,7 @@ def cell_click():
             move = game.minimax_move(computer_player='o')
             game.add_move(x=move[0], y=move[1], player='o')
 
-            winner = game.is_in_won_state(board_state=game.get_cell_list())
+            winner = _is_in_won_state(board_state=game.get_cell_list())
             if winner and winner == 'tie':
                 game.change_status(status='tie', player=None)
             elif winner:
@@ -245,163 +248,6 @@ class Game(db.Model):
         db.session.commit()
         return game
 
-    def json_status(self):
-        return json.dumps({'cells': self.get_cell_list(),
-                           'status': self.status})
-
-    # http://www.neverstopbuilding.com/minimax
-    def minimax_move(self, computer_player, current_state=None):
-        current_state = current_state or self.get_cell_list()
-
-        # if this if the first time the computer is making a move, look up
-        # the optimal move from a table rather than calculating it.
-        # Calculating the computer's first move is by far the slowest
-        # calculation, so caching this result should make things much more
-        # pleasant for the user waiting for the computer to make its move
-        available_moves = self.available_moves(current_state=current_state)
-        if len(available_moves) == 8:
-            return self.get_best_second_move(current_state)
-
-        # perform the minimax calculation by using threads.  This actually
-        # makes the calculation slower on my laptop b/c the minimax
-        # descent is mostly bounded by RAM I/O bandwidth, not by CPU cycles,
-        # so having more threads competing for RAM bandwidth just means there
-        # are more context switches.  On a beefier system with more RAM
-        # throughput, we might actually gain something by bringing more CPUs to
-        # bear on the problem
-        myfutures = {}
-        with futures.ThreadPoolExecutor(max_workers=5) as executor:
-            for move in available_moves:
-                possible_state = copy.deepcopy(current_state)
-                possible_state[move[0]][move[1]] = computer_player
-                myfutures[move] = executor.submit(
-                    self.minimax,
-                    current_state=possible_state,
-                    computer_player=computer_player,
-                    current_player=self._other_player(computer_player)
-                )
-
-        return sorted(myfutures.keys(), key=lambda x: myfutures[x].result(),
-                      reverse=True)[0]
-
-    @staticmethod
-    def get_best_second_move(first_move_state):
-        first_move = None
-        for x in xrange(3):
-            for y in xrange(3):
-                if first_move_state[x][y]:
-                    first_move = (x, y)
-                    break
-            if first_move:
-                break
-
-        second_move_lookup = {
-            (0, 0): (1, 1),
-            (2, 0): (1, 1),
-            (0, 2): (1, 1),
-            (2, 2): (1, 1),
-
-            (0, 1): (0, 0),
-            (2, 1): (0, 1),
-            (1, 0): (1, 2),
-            (1, 2): (1, 1),
-
-            (1, 1): (0, 0),
-        }
-
-        return second_move_lookup[first_move]
-
-    @staticmethod
-    def _other_player(current_player):
-        if current_player == 'x':
-            return 'o'
-        return 'x'
-
-    @classmethod
-    def minimax(cls, current_state, computer_player, current_player):
-        winner = cls.is_in_won_state(board_state=current_state)
-
-        if winner == computer_player:
-            return 1
-        elif winner == 'tie':
-            return 0
-        elif winner and winner != computer_player:
-            return -1
-        else:  # no winner yet, which is fine
-            pass
-
-        scores = []
-        for move in cls.available_moves(current_state=current_state):
-            possible_state = copy.deepcopy(current_state)
-            possible_state[move[0]][move[1]] = current_player
-            next_player = cls._other_player(current_player)
-            scores.append(cls.minimax(current_state=possible_state,
-                                      computer_player=computer_player,
-                                      current_player=next_player))
-
-        if current_player == computer_player:
-            return max(scores)
-        else:
-            return min(scores)
-
-    @staticmethod
-    def available_moves(current_state):
-        moves = []
-        for x in xrange(3):
-            for y in xrange(3):
-                if current_state[x][y] is None:
-                    moves.append((x, y))
-        return moves
-
-
-    WINNERS = (  # list all winning board states for a particular player
-        # horizontal
-        ((0, 0), (1, 0), (2, 0)),
-        ((0, 1), (1, 1), (2, 1)),
-        ((0, 2), (1, 2), (2, 2)),
-
-        # vertical
-        ((0, 0), (0, 1), (0, 2)),
-        ((1, 0), (1, 1), (1, 2)),
-        ((2, 0), (2, 1), (2, 2)),
-
-        # diagonal
-        ((0, 0), (1, 1), (2, 2)),
-        ((2, 0), (1, 1), (0, 2)),
-    )
-
-    @classmethod
-    def is_in_won_state(cls, board_state):
-        x_won = any(
-            state for state in cls.WINNERS
-            if cls._state_matches(state, player='x', board_state=board_state))
-
-        o_won = any(
-            state for state in cls.WINNERS
-            if cls._state_matches(state, player='o', board_state=board_state))
-
-        board_full = True
-        for x in xrange(3):
-            for y in xrange(3):
-                if board_state[x][y] is None:
-                    board_full = False
-                    break
-            if not board_full:
-                break
-
-        if x_won:
-            return 'x'
-        elif o_won:
-            return 'o'
-        elif board_full:
-            return 'tie'
-        else:
-            return
-
-    @staticmethod
-    def _state_matches(state, player, board_state):
-        return all(board_state[cell[0]][cell[1]] == player for cell in state)
-
     def change_status(self, status, player=None):
         if self.status == status:
             return
@@ -412,6 +258,46 @@ class Game(db.Model):
 
         db.session.add(self)
         db.session.commit()
+
+    def json_status(self):
+        return json.dumps({'cells': self.get_cell_list(),
+                           'status': self.status})
+
+    # http://www.neverstopbuilding.com/minimax
+    def minimax_move(self, computer_player):
+        current_state = self.get_cell_list()
+
+        # if this if the first time the computer is making a move, look up
+        # the optimal move from a table rather than calculating it.
+        # Calculating the computer's first move is by far the slowest
+        # calculation, so caching this result should make things much more
+        # pleasant for the user waiting for the computer to make its move
+        avail_moves = _available_moves(current_state=current_state)
+        if len(avail_moves) == 8:
+            return _get_best_second_move(current_state)
+
+        # perform the minimax calculation by using threads.  This actually
+        # makes the calculation slower (versus single thread) on my laptop
+        # b/c the minimax descent is mostly bounded by RAM I/O bandwidth, not
+        # by CPU cycles, so having more threads competing for RAM bandwidth
+        # just means there are more context switches.  On a beefier system with
+        # more RAM throughput, we might actually gain something by bringing
+        # more CPUs to bear on the problem
+        myfutures = {}
+        with futures.ThreadPoolExecutor(max_workers=5) as executor:
+            for move in avail_moves:
+                possible_state = copy.deepcopy(current_state)
+                possible_state[move[0]][move[1]] = computer_player
+                myfutures[move] = executor.submit(
+                    _minimax,
+                    current_state=possible_state,
+                    computer_player=computer_player,
+                    current_player=_other_player(computer_player)
+                )
+
+        # get max result and return the move which produces this result
+        return sorted(myfutures.keys(), key=lambda x: myfutures[x].result(),
+                      reverse=True)[0]
 
 
 class CellState(db.Model):
@@ -460,6 +346,127 @@ class NewUserForm(Form):
 def utcnow():
     return datetime.datetime.now().replace(tzinfo=pytz.utc)
 
+
+def _other_player(current_player):
+        if current_player == 'x':
+            return 'o'
+        return 'x'
+
+
+def _get_best_second_move(first_move_state):
+        # after the human player has taken the first move, we want the computer
+        # to make the second move.  Calculating the best possible
+        # move takes 5-8 sec on my quad core laptop and is easily
+        # pre-calculable, so hard-code the correct followup move for the 9
+        # possible first moves. All subsequent moves have much smaller decision
+        # spaces, so perform best move calculation for the 4rd, 6th, and 8th
+        # moves rather than hard-coding
+
+        # iterate over the whole board and pick the one occupied spot as
+        # being the first move
+        all_locations = itertools.product(xrange(3), xrange(3))
+        first_move = (
+            location for location in all_locations
+            if first_move_state[location[0]][location[1]]
+        ).next()
+
+        # look up the correct counter move in this dict
+        second_move_lookup = {
+            (0, 0): (1, 1),
+            (2, 0): (1, 1),
+            (0, 2): (1, 1),
+            (2, 2): (1, 1),
+
+            (0, 1): (0, 0),
+            (2, 1): (0, 1),
+            (1, 0): (1, 2),
+            (1, 2): (1, 1),
+
+            (1, 1): (0, 0),
+        }
+
+        return second_move_lookup[first_move]
+
+
+def _is_in_won_state(board_state):
+    winners = (  # list all winning board states for a particular player
+        # horizontal
+        ((0, 0), (1, 0), (2, 0)),
+        ((0, 1), (1, 1), (2, 1)),
+        ((0, 2), (1, 2), (2, 2)),
+
+        # vertical
+        ((0, 0), (0, 1), (0, 2)),
+        ((1, 0), (1, 1), (1, 2)),
+        ((2, 0), (2, 1), (2, 2)),
+
+        # diagonal
+        ((0, 0), (1, 1), (2, 2)),
+        ((2, 0), (1, 1), (0, 2)),
+    )
+
+    x_won = any(
+        state for state in winners
+        if _state_matches(state, player='x', board_state=board_state))
+
+    o_won = any(
+        state for state in winners
+        if _state_matches(state, player='o', board_state=board_state))
+
+    # iterate over all locations on the board, and if there are no empty
+    # locations, then the board is full (board_full=True)
+    all_locations = itertools.product(xrange(3), xrange(3))
+    board_full = not any(
+        location for location in all_locations
+        if board_state[location[0]][location[1]] is None
+    )
+
+    if x_won:
+        return 'x'
+    elif o_won:
+        return 'o'
+    elif board_full:
+        return 'tie'
+    else:
+        return
+
+
+def _minimax(current_state, computer_player, current_player):
+    winner = _is_in_won_state(board_state=current_state)
+
+    if winner == computer_player:
+        return 1
+    elif winner == 'tie':
+        return 0
+    elif winner and winner != computer_player:
+        return -1
+    else:  # no winner yet, which is fine
+        pass
+
+    scores = []
+    for move in _available_moves(current_state=current_state):
+        possible_state = copy.deepcopy(current_state)
+        possible_state[move[0]][move[1]] = current_player
+        next_player = _other_player(current_player)
+        scores.append(_minimax(current_state=possible_state,
+                              computer_player=computer_player,
+                              current_player=next_player))
+
+    if current_player == computer_player:
+        return max(scores)
+    else:
+        return min(scores)
+
+
+def _available_moves(current_state):
+    all_locations = itertools.product(xrange(3), xrange(3))
+    moves = (location for location in all_locations
+             if current_state[location[0]][location[1]] is None)
+    return list(moves)
+
+
+def _state_matches(state, player, board_state):
+    return all(board_state[cell[0]][cell[1]] == player for cell in state)
 
 if __name__ == '__main__':
     app.run()

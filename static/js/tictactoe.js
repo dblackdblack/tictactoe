@@ -19,6 +19,8 @@ var ticTacToeCtrl = ticTacToeApp.controller('ticTacToeCtrl', function($scope, $q
     $http.get('latest_game').success(parseResponse);
   };
 
+  $scope.getLatestGame();
+
   $scope.cells = [
     [null, null, null],
     [null, null, null],
@@ -27,9 +29,9 @@ var ticTacToeCtrl = ticTacToeApp.controller('ticTacToeCtrl', function($scope, $q
 
   $scope.gameStatus = null;
 
-  $scope.getLatestGame();
-
   $scope.getClassForCell = function(x, y) {
+    "use strict";
+
     var emptyStyle = "fa fa-4x col-md-3";
     var cellVal = $scope.cells[x][y];
 
@@ -43,6 +45,8 @@ var ticTacToeCtrl = ticTacToeApp.controller('ticTacToeCtrl', function($scope, $q
   };
 
   $scope.cellClicked = function(x, y) {
+    "use strict";
+
     if($scope.cells[x][y] !== null) { // there is already a move at this location
       return;
     } else if ($scope.gameStatus === 'won' || $scope.gameStatus === 'tie') {
