@@ -33,10 +33,10 @@
   </nav>
 
   <div ng-controller="ticTacToeCtrl">
-    <button ng-hide="gameStatus === 'new'" ng-click="newGame()" ng-cloak class="btn btn-info">New game</button>
-    <span ng-show="gameStatus == 'won'" ng-cloak>You lost!</span>  {# somebody (computer or human) won, and since it is impossible for a human #}
-                                                                   {# to beat the computer, this means the human ("you") lost #}
-    <span ng-show="gameStatus == 'tie'" ng-cloak>It's a tie!</span>
+    <button ng-hide="gameStatus === 'new'" ng-click="newGame()" ng-cloak class="btn btn-lg btn-info">New game</button><br><br>
+    <span class="alert alert-danger" ng-show="gameStatus == 'won'" ng-cloak>You lost!</span>  {# somebody (computer or human) won, and since it is impossible for a human #}
+                                                                                              {# to beat the computer, this means the human ("you") lost #}
+    <span class="alert alert-danger" ng-show="gameStatus == 'tie'" ng-cloak>It's a tie!</span><br>
     <br>
     <div class="container">
       <table class="table table-bordered text-center center-block">
