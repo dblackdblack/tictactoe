@@ -55,12 +55,14 @@ var ticTacToeCtrl = ticTacToeApp.controller('ticTacToeCtrl', function($scope, $q
 
     $scope.cells[x][y] = 'x';
     $scope.showSpinner = true;
+    $('#myModal').modal('show');
     $http.post('cell_click', angular.toJson({x: x, y: y}))
       .success(parseResponse)
       .error(function(respData) {
         angular.noop();
       }).then(function() {
         $scope.showSpinner = false
+        $('#myModal').modal('hide');
       });
   };
 

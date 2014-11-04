@@ -33,7 +33,6 @@
   </nav>
 
   <div ng-controller="ticTacToeCtrl">
-    <i ng-show="showSpinner" ng-cloak class="fa fa-spinner fa-spin fa-4x"></i>
     <button ng-hide="gameStatus === 'new'" ng-click="newGame()" ng-cloak class="btn btn-info">New game</button>
     <span ng-show="gameStatus == 'won'" ng-cloak>You lost!</span>  {# somebody (computer or human) won, and since it is impossible for a human #}
                                                                    {# to beat the computer, this means the human ("you") lost #}
@@ -59,6 +58,9 @@
       </table>
     </div>
   </div>
+<div class="modal modal-dialog" id="myModal">
+  <i ng-cloak class="fa fa-spinner fa-spin fa-5x"></i>
+</div>
 </body>
 <script type="application/javascript" src="/static/bower_components/jquery/dist/jquery.min.js"></script>
 <script type="application/javascript" src="/static/bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
