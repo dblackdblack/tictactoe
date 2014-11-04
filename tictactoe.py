@@ -280,7 +280,7 @@ class Game(db.Model):
         return json.dumps({'cells': self.get_cell_list(),
                            'status': self.status})
 
-    # http://www.neverstopbuilding.com/minimax
+    # inspired by http://www.neverstopbuilding.com/minimax
     def minimax_move(self, computer_player):
         current_state = self.get_cell_list()
 

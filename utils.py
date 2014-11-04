@@ -17,15 +17,11 @@ def other_player(current_player):
     return 'x'
 
 
+# after the human player has taken the first move, we want the computer
+# to make the second move.  Calculating the best possible move takes 5-8 sec
+# on my quad core laptop and is easily pre-calculable, so, to save time,
+# hard-code the correct followup move for all 9 possible first moves.
 def get_best_second_move(first_move_state):
-    # after the human player has taken the first move, we want the computer
-    # to make the second move.  Calculating the best possible
-    # move takes 5-8 sec on my quad core laptop and is easily
-    # pre-calculable, so hard-code the correct followup move for the 9
-    # possible first moves. All subsequent moves have much smaller decision
-    # spaces, so perform best move calculation for the 4rd, 6th, and 8th
-    # moves rather than hard-coding
-
     # iterate over the whole board and pick the one occupied spot as
     # being the first move
     all_locations = itertools.product(xrange(3), xrange(3))
@@ -52,31 +48,38 @@ def get_best_second_move(first_move_state):
     return second_move_lookup[first_move]
 
 
+# enumerate all sequences of moves which would mean that a player has won
+# e.g. if the player has made moves (0,0), (1, 0), (2, 0), this would be the
+# top-most horizontal line on the board.  If a player had all three of these
+# moves, that player must have won
+WINNING_STATES = (
+    # horizontal
+    ((0, 0), (1, 0), (2, 0)),
+    ((0, 1), (1, 1), (2, 1)),
+    ((0, 2), (1, 2), (2, 2)),
+
+    # vertical
+    ((0, 0), (0, 1), (0, 2)),
+    ((1, 0), (1, 1), (1, 2)),
+    ((2, 0), (2, 1), (2, 2)),
+
+    # diagonal
+    ((0, 0), (1, 1), (2, 2)),
+    ((2, 0), (1, 1), (0, 2)),
+)
+
+
+# return which player ('x' or 'o') is the winner, 'tie' if the game has ended
+# in a tie, or None if there is no winner yet
 def get_winner(board_state):
     # list all winning board states for a particular player
-    winners = (
-        # horizontal
-        ((0, 0), (1, 0), (2, 0)),
-        ((0, 1), (1, 1), (2, 1)),
-        ((0, 2), (1, 2), (2, 2)),
-
-        # vertical
-        ((0, 0), (0, 1), (0, 2)),
-        ((1, 0), (1, 1), (1, 2)),
-        ((2, 0), (2, 1), (2, 2)),
-
-        # diagonal
-        ((0, 0), (1, 1), (2, 2)),
-        ((2, 0), (1, 1), (0, 2)),
-    )
-
     x_won = any(
-        state for state in winners
+        state for state in WINNING_STATES
         if state_matches(state, player='x', board_state=board_state)
     )
 
     o_won = any(
-        state for state in winners
+        state for state in WINNING_STATES
         if state_matches(state, player='o', board_state=board_state)
     )
 
@@ -98,13 +101,16 @@ def get_winner(board_state):
         return
 
 
+# used in conjunction with _is_in_won_state to determine whether the
+# passed-in player has played all the cells locations in state.  This
+# is used to determine if a player has won the game by matching against
+# all possible winning moves, as enumerated in WINNING_STATES
 def state_matches(state, player, board_state):
-    # used in conjunction with _is_in_won_state to determine whether the
-    # passed-in player has played all the cells locations in state.  This
-    # is used to determine if a player has won the game
     return all(board_state[cell[0]][cell[1]] == player for cell in state)
 
 
+# the minimax algorithm for playing perfect information games
+# http://web.stanford.edu/~msirota/soco/minimax.html
 def minimax(current_state, computer_player, current_player):
     winner = get_winner(board_state=current_state)
     if winner:
@@ -126,12 +132,8 @@ def minimax(current_state, computer_player, current_player):
         return min(scores)
 
 
-def apply_move(initial_state, move, current_player):
-    next_state = copy.deepcopy(initial_state)
-    next_state[move[0]][move[1]] = current_player
-    return next_state
-
-
+# called on games which have ended in a win or a tie
+# returns 1 if the computer has won, 0 if tie, -1 if human won
 def minimax_score(winner, computer_player):
     if winner == computer_player:
         return 1
@@ -143,9 +145,16 @@ def minimax_score(winner, computer_player):
         raise NotImplemented("shouldn't get here")
 
 
+# make a copy of initial_state and apply a move made by current_player to
+# that state.  Used to recursively descending the possibility space by minimax
+def apply_move(initial_state, move, current_player):
+    next_state = copy.deepcopy(initial_state)
+    next_state[move[0]][move[1]] = current_player
+    return next_state
+
+
+# iterate over all locations on the board and return list of all empty cells
 def get_available_moves(current_state):
-    # iterate over all locations on the board and return list of all
-    # empty cells
     all_locations = itertools.product(xrange(3), xrange(3))
     moves = (location for location in all_locations
              if current_state[location[0]][location[1]] is None)
