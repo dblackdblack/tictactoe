@@ -371,42 +371,43 @@ def _other_player(current_player):
 
 
 def _get_best_second_move(first_move_state):
-        # after the human player has taken the first move, we want the computer
-        # to make the second move.  Calculating the best possible
-        # move takes 5-8 sec on my quad core laptop and is easily
-        # pre-calculable, so hard-code the correct followup move for the 9
-        # possible first moves. All subsequent moves have much smaller decision
-        # spaces, so perform best move calculation for the 4rd, 6th, and 8th
-        # moves rather than hard-coding
+    # after the human player has taken the first move, we want the computer
+    # to make the second move.  Calculating the best possible
+    # move takes 5-8 sec on my quad core laptop and is easily
+    # pre-calculable, so hard-code the correct followup move for the 9
+    # possible first moves. All subsequent moves have much smaller decision
+    # spaces, so perform best move calculation for the 4rd, 6th, and 8th
+    # moves rather than hard-coding
 
-        # iterate over the whole board and pick the one occupied spot as
-        # being the first move
-        all_locations = itertools.product(xrange(3), xrange(3))
-        first_move = (
-            location for location in all_locations
-            if first_move_state[location[0]][location[1]]
-        ).next()
+    # iterate over the whole board and pick the one occupied spot as
+    # being the first move
+    all_locations = itertools.product(xrange(3), xrange(3))
+    first_move = (
+        location for location in all_locations
+        if first_move_state[location[0]][location[1]]
+    ).next()
 
-        # look up the correct counter move in this dict
-        second_move_lookup = {
-            (0, 0): (1, 1),
-            (2, 0): (1, 1),
-            (0, 2): (1, 1),
-            (2, 2): (1, 1),
+    # look up the correct counter move in this dict
+    second_move_lookup = {
+        (0, 0): (1, 1),
+        (2, 0): (1, 1),
+        (0, 2): (1, 1),
+        (2, 2): (1, 1),
 
-            (0, 1): (0, 0),
-            (2, 1): (0, 1),
-            (1, 0): (1, 2),
-            (1, 2): (1, 1),
+        (0, 1): (0, 0),
+        (2, 1): (0, 1),
+        (1, 0): (1, 2),
+        (1, 2): (1, 1),
 
-            (1, 1): (0, 0),
-        }
+        (1, 1): (0, 0),
+    }
 
-        return second_move_lookup[first_move]
+    return second_move_lookup[first_move]
 
 
 def _winner(board_state):
-    winners = (  # list all winning board states for a particular player
+    # list all winning board states for a particular player
+    winners = (
         # horizontal
         ((0, 0), (1, 0), (2, 0)),
         ((0, 1), (1, 1), (2, 1)),
@@ -459,15 +460,8 @@ def _state_matches(state, player, board_state):
 
 def _minimax(current_state, computer_player, current_player):
     winner = _winner(board_state=current_state)
-
-    if winner == computer_player:
-        return 1
-    elif winner == 'tie':
-        return 0
-    elif winner and winner != computer_player:
-        return -1
-    else:  # no winner yet, which is fine
-        pass
+    if winner:
+        return _minimax_score(winner=winner, computer_player=computer_player)
 
     scores = []
     for move in _get_available_moves(current_state=current_state):
@@ -482,6 +476,17 @@ def _minimax(current_state, computer_player, current_player):
         return max(scores)
     else:
         return min(scores)
+
+
+def _minimax_score(winner, computer_player):
+    if winner == computer_player:
+        return 1
+    elif winner == 'tie':
+        return 0
+    elif winner and winner != computer_player:
+        return -1
+    else:  # this shouldn't get called unless there's a winner
+        raise NotImplemented("shouldn't get here")
 
 
 def _get_available_moves(current_state):
