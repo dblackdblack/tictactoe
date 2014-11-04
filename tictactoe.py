@@ -303,8 +303,9 @@ class Game(db.Model):
         myfutures = {}
         with futures.ThreadPoolExecutor(max_workers=5) as executor:
             for move in avail_moves:
-                possible_state = copy.deepcopy(current_state)
-                possible_state[move[0]][move[1]] = computer_player
+                possible_state = _apply_move(initial_state=current_state,
+                                             current_player=computer_player,
+                                             move=move)
                 myfutures[move] = executor.submit(
                     _minimax,
                     current_state=possible_state,
@@ -465,8 +466,9 @@ def _minimax(current_state, computer_player, current_player):
 
     scores = []
     for move in _get_available_moves(current_state=current_state):
-        possible_state = copy.deepcopy(current_state)
-        possible_state[move[0]][move[1]] = current_player
+        possible_state = _apply_move(initial_state=current_state,
+                                     move=move,
+                                     current_player=current_player)
         next_player = _other_player(current_player)
         scores.append(_minimax(current_state=possible_state,
                                computer_player=computer_player,
@@ -476,6 +478,12 @@ def _minimax(current_state, computer_player, current_player):
         return max(scores)
     else:
         return min(scores)
+
+
+def _apply_move(initial_state, move, current_player):
+    next_state = copy.deepcopy(initial_state)
+    next_state[move[0]][move[1]] = current_player
+    return next_state
 
 
 def _minimax_score(winner, computer_player):
