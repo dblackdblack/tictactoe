@@ -69,7 +69,7 @@ var ticTacToeCtrl = ticTacToeApp.controller('ticTacToeCtrl', function($scope, $q
         .error(function(respData) {
           angular.noop();
         }).then(function() {
-          $scope.showSpinner = false
+          $scope.showSpinner = false;
           $('#myModal').modal('hide');
         });
    };
@@ -78,5 +78,5 @@ var ticTacToeCtrl = ticTacToeApp.controller('ticTacToeCtrl', function($scope, $q
    * which starts up a brand new game for this user */
   $scope.newGame = function() {
     $http.post('new_game').success(parseResponse);
-  }
+  };
 });
