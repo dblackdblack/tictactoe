@@ -11,4 +11,6 @@
 1. visit http://localhost:5000 in your browser
 1. click on 'new user'
 1. add a new user
+1. click on one of the squares in the ugly table
 1. enjoy!
+1. click 'New Game' to start a new game
