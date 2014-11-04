@@ -90,7 +90,6 @@ def new_user():
 def latest_game():
     game = current_user.latest_game()
     if game:
-        result = game.get_cell_list()
         return game.json_status()
 
     else:
@@ -107,33 +106,51 @@ def cell_click():
     game = current_user.latest_game() or Game.new_game(user_id=current_user.id)
 
     if game.is_valid_move(x, y):
-        if _is_in_won_state(board_state=game.get_cell_list()):
+        if _winner(board_state=game.get_cell_list()):
             raise ValidationError('this game has already been won')
 
         game.add_move(x=x, y=y, player='x')
 
-        winner = _is_in_won_state(board_state=game.get_cell_list())
+        # after applying the human's move, check to see if the board is now
+        # in a won/tied state
+        winner = _winner(board_state=game.get_cell_list())
         if winner and winner == 'tie':
             game.change_status(status='tie')
-        elif winner:
-            game.change_status(status='won', player='x')
-            flash("you win!")
 
-        else:
-            move = game.minimax_move(computer_player='o')
-            game.add_move(x=move[0], y=move[1], player='o')
+        elif winner:  # state just changed from not-won => won after
+                      # applying the human's move, so the human must have won
+            _human_won(game)
 
-            winner = _is_in_won_state(board_state=game.get_cell_list())
-            if winner and winner == 'tie':
-                game.change_status(status='tie', player=None)
-            elif winner:
-                game.change_status(status='won', player=winner)
-                flash("computer wins!")
+        else:  # no winner after human's move, so kick off computer's move
+            _computer_move(game)
 
     else:
         abort(403)
 
     return game.json_status()
+
+
+def _human_won(game):
+    game.change_status(status='won', player='x')
+    flash("you win!")
+
+    # if the minimax algorithm is written correctly, the human player
+    # should never win.  The best s/he can do is tie
+    raise Exception("The human must never win")
+
+
+def _computer_move(game):
+    move = game.minimax_move(computer_player='o')
+    game.add_move(x=move[0], y=move[1], player='o')
+
+    winner = _winner(board_state=game.get_cell_list())
+    if winner and winner == 'tie':
+        game.change_status(status='tie', player=None)
+
+    elif winner:  # game changed from not-won => won after computer's
+                  # move, so computer must have won
+        game.change_status(status='won', player=winner)
+        flash("computer wins!")
 
 @app.route('/new_game', methods=('POST',))
 @login_required
@@ -217,6 +234,7 @@ class Game(db.Model):
         if self.status not in ('new', 'in_progress'):
             return False
 
+        # does this cell exist in the database already?  If so, invalid move
         try:
             _ = CellState.query.filter_by(game_id=self.id, x=x, y=y)[0]
             return False
@@ -271,7 +289,7 @@ class Game(db.Model):
         # Calculating the computer's first move is by far the slowest
         # calculation, so caching this result should make things much more
         # pleasant for the user waiting for the computer to make its move
-        avail_moves = _available_moves(current_state=current_state)
+        avail_moves = _get_available_moves(current_state=current_state)
         if len(avail_moves) == 8:
             return _get_best_second_move(current_state)
 
@@ -387,7 +405,7 @@ def _get_best_second_move(first_move_state):
         return second_move_lookup[first_move]
 
 
-def _is_in_won_state(board_state):
+def _winner(board_state):
     winners = (  # list all winning board states for a particular player
         # horizontal
         ((0, 0), (1, 0), (2, 0)),
@@ -406,11 +424,13 @@ def _is_in_won_state(board_state):
 
     x_won = any(
         state for state in winners
-        if _state_matches(state, player='x', board_state=board_state))
+        if _state_matches(state, player='x', board_state=board_state)
+    )
 
     o_won = any(
         state for state in winners
-        if _state_matches(state, player='o', board_state=board_state))
+        if _state_matches(state, player='o', board_state=board_state)
+    )
 
     # iterate over all locations on the board, and if there are no empty
     # locations, then the board is full (board_full=True)
@@ -426,12 +446,19 @@ def _is_in_won_state(board_state):
         return 'o'
     elif board_full:
         return 'tie'
-    else:
+    else:  # no winner yet
         return
 
 
+def _state_matches(state, player, board_state):
+    # used in conjunction with _is_in_won_state to determine whether the
+    # passed-in player has played all the cells locations in state.  This
+    # is used to determine if a player has won the game
+    return all(board_state[cell[0]][cell[1]] == player for cell in state)
+
+
 def _minimax(current_state, computer_player, current_player):
-    winner = _is_in_won_state(board_state=current_state)
+    winner = _winner(board_state=current_state)
 
     if winner == computer_player:
         return 1
@@ -443,13 +470,13 @@ def _minimax(current_state, computer_player, current_player):
         pass
 
     scores = []
-    for move in _available_moves(current_state=current_state):
+    for move in _get_available_moves(current_state=current_state):
         possible_state = copy.deepcopy(current_state)
         possible_state[move[0]][move[1]] = current_player
         next_player = _other_player(current_player)
         scores.append(_minimax(current_state=possible_state,
-                              computer_player=computer_player,
-                              current_player=next_player))
+                               computer_player=computer_player,
+                               current_player=next_player))
 
     if current_player == computer_player:
         return max(scores)
@@ -457,15 +484,14 @@ def _minimax(current_state, computer_player, current_player):
         return min(scores)
 
 
-def _available_moves(current_state):
+def _get_available_moves(current_state):
+    # iterate over all locations on the board and return list of all
+    # empty cells
     all_locations = itertools.product(xrange(3), xrange(3))
     moves = (location for location in all_locations
              if current_state[location[0]][location[1]] is None)
     return list(moves)
 
-
-def _state_matches(state, player, board_state):
-    return all(board_state[cell[0]][cell[1]] == player for cell in state)
 
 if __name__ == '__main__':
     app.run()
