@@ -3,23 +3,22 @@
 from __future__ import unicode_literals
 
 import os
-import copy
 import json
 import os.path
-import datetime
-import itertools
 
-import pytz
 from concurrent import futures
 
 from sqlalchemy import desc
-from sqlalchemy.orm.exc import NoResultFound
-
 from flask import (Flask, flash, redirect, url_for, render_template, request,
                    abort)
 from flask.ext.sqlalchemy import SQLAlchemy
 from flask.ext.login import (LoginManager, login_user, logout_user,
                              login_required, current_user)
+from wtforms.validators import ValidationError
+
+import forms
+from utils import (utcnow, get_winner, get_available_moves,
+                   get_best_second_move, apply_move, minimax, other_player)
 
 MAX_USERNAME_LENGTH = 50
 
@@ -59,7 +58,7 @@ def logout():
 
 @app.route("/login", methods=("GET", "POST"))
 def login():
-    form = LoginForm()  # LoginForm()
+    form = forms.LoginForm()  # LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.data['username']).one()
         login_user(user)
@@ -72,7 +71,7 @@ def login():
 
 @app.route('/new_user', methods=('GET', 'POST'))
 def new_user():
-    form = NewUserForm()
+    form = forms.NewUserForm()
     if form.validate_on_submit():
         user = User(username=form.data['username'])
         db.session.add(user)
@@ -106,23 +105,23 @@ def cell_click():
     game = current_user.latest_game() or Game.new_game(user_id=current_user.id)
 
     if game.is_valid_move(x, y):
-        if _winner(board_state=game.get_cell_list()):
+        if get_winner(board_state=game.get_cell_list()):
             raise ValidationError('this game has already been won')
 
         game.add_move(x=x, y=y, player='x')
 
         # after applying the human's move, check to see if the board is now
         # in a won/tied state
-        winner = _winner(board_state=game.get_cell_list())
+        winner = get_winner(board_state=game.get_cell_list())
         if winner and winner == 'tie':
             game.change_status(status='tie')
 
         elif winner:  # state just changed from not-won => won after
                       # applying the human's move, so the human must have won
-            _human_won(game)
+            human_won(game)
 
         else:  # no winner after human's move, so kick off computer's move
-            _computer_move(game)
+            computer_move(game)
 
     else:
         abort(403)
@@ -130,7 +129,7 @@ def cell_click():
     return game.json_status()
 
 
-def _human_won(game):
+def human_won(game):
     game.change_status(status='won', player='x')
     flash("you win!")
 
@@ -139,11 +138,11 @@ def _human_won(game):
     raise Exception("The human must never win")
 
 
-def _computer_move(game):
+def computer_move(game):
     move = game.minimax_move(computer_player='o')
     game.add_move(x=move[0], y=move[1], player='o')
 
-    winner = _winner(board_state=game.get_cell_list())
+    winner = get_winner(board_state=game.get_cell_list())
     if winner and winner == 'tie':
         game.change_status(status='tie', player=None)
 
@@ -151,6 +150,7 @@ def _computer_move(game):
                   # move, so computer must have won
         game.change_status(status='won', player=winner)
         flash("computer wins!")
+
 
 @app.route('/new_game', methods=('POST',))
 @login_required
@@ -164,7 +164,7 @@ def unauthorized():
     return redirect(url_for('login'))
 
 
-# --------- ORM Objects -------------
+# --------- ORM Objects/Models -------------
 
 
 class User(db.Model):
@@ -289,9 +289,9 @@ class Game(db.Model):
         # Calculating the computer's first move is by far the slowest
         # calculation, so caching this result should make things much more
         # pleasant for the user waiting for the computer to make its move
-        avail_moves = _get_available_moves(current_state=current_state)
+        avail_moves = get_available_moves(current_state=current_state)
         if len(avail_moves) == 8:
-            return _get_best_second_move(current_state)
+            return get_best_second_move(current_state)
 
         # perform the minimax calculation by using threads.  This actually
         # makes the calculation slower (versus single thread) on my laptop
@@ -303,14 +303,14 @@ class Game(db.Model):
         myfutures = {}
         with futures.ThreadPoolExecutor(max_workers=5) as executor:
             for move in avail_moves:
-                possible_state = _apply_move(initial_state=current_state,
+                possible_state = apply_move(initial_state=current_state,
                                              current_player=computer_player,
                                              move=move)
                 myfutures[move] = executor.submit(
-                    _minimax,
+                    minimax,
                     current_state=possible_state,
                     computer_player=computer_player,
-                    current_player=_other_player(computer_player)
+                    current_player=other_player(computer_player)
                 )
 
         # get max result and return the move which produces this result
@@ -329,181 +329,6 @@ class CellState(db.Model):
     @property
     def user(self):
         return self.game.user
-
-# ------- FORMS ----------
-
-from flask_wtf import Form
-from wtforms import StringField
-from wtforms.validators import DataRequired, ValidationError, Length
-
-
-class LoginForm(Form):
-    username = StringField(
-        'username', validators=(DataRequired(),
-                                Length(max=MAX_USERNAME_LENGTH)))
-
-    def validate_username(self, field):
-        try:
-            User.query.filter_by(username=field.data).one()
-        except NoResultFound:
-            raise ValidationError("invalid username '%s'" % field.data)
-
-
-class NewUserForm(Form):
-    username = StringField(
-        'username', validators=(DataRequired(),
-                                Length(max=MAX_USERNAME_LENGTH)))
-
-    def validate_username(self, field):
-        if User.query.filter_by(username=field.data).limit(1).scalar():
-            raise ValidationError("username '%s' already exists" % field.data)
-
-# ------- Utility functions -----------
-
-
-def utcnow():
-    return datetime.datetime.now().replace(tzinfo=pytz.utc)
-
-
-def _other_player(current_player):
-        if current_player == 'x':
-            return 'o'
-        return 'x'
-
-
-def _get_best_second_move(first_move_state):
-    # after the human player has taken the first move, we want the computer
-    # to make the second move.  Calculating the best possible
-    # move takes 5-8 sec on my quad core laptop and is easily
-    # pre-calculable, so hard-code the correct followup move for the 9
-    # possible first moves. All subsequent moves have much smaller decision
-    # spaces, so perform best move calculation for the 4rd, 6th, and 8th
-    # moves rather than hard-coding
-
-    # iterate over the whole board and pick the one occupied spot as
-    # being the first move
-    all_locations = itertools.product(xrange(3), xrange(3))
-    first_move = (
-        location for location in all_locations
-        if first_move_state[location[0]][location[1]]
-    ).next()
-
-    # look up the correct counter move in this dict
-    second_move_lookup = {
-        (0, 0): (1, 1),
-        (2, 0): (1, 1),
-        (0, 2): (1, 1),
-        (2, 2): (1, 1),
-
-        (0, 1): (0, 0),
-        (2, 1): (0, 1),
-        (1, 0): (1, 2),
-        (1, 2): (1, 1),
-
-        (1, 1): (0, 0),
-    }
-
-    return second_move_lookup[first_move]
-
-
-def _winner(board_state):
-    # list all winning board states for a particular player
-    winners = (
-        # horizontal
-        ((0, 0), (1, 0), (2, 0)),
-        ((0, 1), (1, 1), (2, 1)),
-        ((0, 2), (1, 2), (2, 2)),
-
-        # vertical
-        ((0, 0), (0, 1), (0, 2)),
-        ((1, 0), (1, 1), (1, 2)),
-        ((2, 0), (2, 1), (2, 2)),
-
-        # diagonal
-        ((0, 0), (1, 1), (2, 2)),
-        ((2, 0), (1, 1), (0, 2)),
-    )
-
-    x_won = any(
-        state for state in winners
-        if _state_matches(state, player='x', board_state=board_state)
-    )
-
-    o_won = any(
-        state for state in winners
-        if _state_matches(state, player='o', board_state=board_state)
-    )
-
-    # iterate over all locations on the board, and if there are no empty
-    # locations, then the board is full (board_full=True)
-    all_locations = itertools.product(xrange(3), xrange(3))
-    board_full = not any(
-        location for location in all_locations
-        if board_state[location[0]][location[1]] is None
-    )
-
-    if x_won:
-        return 'x'
-    elif o_won:
-        return 'o'
-    elif board_full:
-        return 'tie'
-    else:  # no winner yet
-        return
-
-
-def _state_matches(state, player, board_state):
-    # used in conjunction with _is_in_won_state to determine whether the
-    # passed-in player has played all the cells locations in state.  This
-    # is used to determine if a player has won the game
-    return all(board_state[cell[0]][cell[1]] == player for cell in state)
-
-
-def _minimax(current_state, computer_player, current_player):
-    winner = _winner(board_state=current_state)
-    if winner:
-        return _minimax_score(winner=winner, computer_player=computer_player)
-
-    scores = []
-    for move in _get_available_moves(current_state=current_state):
-        possible_state = _apply_move(initial_state=current_state,
-                                     move=move,
-                                     current_player=current_player)
-        next_player = _other_player(current_player)
-        scores.append(_minimax(current_state=possible_state,
-                               computer_player=computer_player,
-                               current_player=next_player))
-
-    if current_player == computer_player:
-        return max(scores)
-    else:
-        return min(scores)
-
-
-def _apply_move(initial_state, move, current_player):
-    next_state = copy.deepcopy(initial_state)
-    next_state[move[0]][move[1]] = current_player
-    return next_state
-
-
-def _minimax_score(winner, computer_player):
-    if winner == computer_player:
-        return 1
-    elif winner == 'tie':
-        return 0
-    elif winner and winner != computer_player:
-        return -1
-    else:  # this shouldn't get called unless there's a winner
-        raise NotImplemented("shouldn't get here")
-
-
-def _get_available_moves(current_state):
-    # iterate over all locations on the board and return list of all
-    # empty cells
-    all_locations = itertools.product(xrange(3), xrange(3))
-    moves = (location for location in all_locations
-             if current_state[location[0]][location[1]] is None)
-    return list(moves)
 
 
 if __name__ == '__main__':
