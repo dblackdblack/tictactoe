@@ -1,7 +1,7 @@
 1. install nodejs
 1. `npm install bower`
 1. make new virtualenv and activate it
-1. make new sub-directory and chdir into it  
+1. make new sub-directory to hold checked out code and chdir into it  
 1. `git clone https://github.com/dblackdblack/tictactoe.git .`
 1. `pip install -r requirements.txt`  
 1. `bower install`
