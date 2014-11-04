@@ -6,6 +6,7 @@
 1. `pip install -r requirements.txt`  
 1. `bower install`
 1. ```export TICTACTOE_ROOT=`pwd` ```
+1. make sure the environment varirable WORKON_HOME is set to the directory that houses virtualenvs.  virtualenvwrapper ('workon') set this automatically
 1. `python -c "import tictactoe ; tictactoe.db.create_all()"`
 1. `uwsgi --emperor uwsgi.ini`
 1. visit http://localhost:5000 in your browser
