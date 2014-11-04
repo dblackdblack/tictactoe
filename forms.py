@@ -2,10 +2,12 @@ from __future__ import unicode_literals
 
 from sqlalchemy.orm.exc import NoResultFound
 
-from tictactoe import MAX_USERNAME_LENGTH, User
+from tictactoe import User
 from flask_wtf import Form
 from wtforms import StringField
 from wtforms.validators import DataRequired, ValidationError, Length
+
+MAX_USERNAME_LENGTH = 50
 
 
 class LoginForm(Form):
